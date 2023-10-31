@@ -70,13 +70,12 @@ class ConvolutionLayer:
 
         ### Yields each portion of the image with respect to the kernel size
         '''
-        height, width = image.shape
+        height, width, *_ = image.shape
         self.image = image
 
         for h in range(height-self.kernel_size+1):
             for w in range(width-self.kernel_size+1):
                 segment = image[h:h+(self.kernel_size), w:w+(self.kernel_size)]
-                segment = np.expand_dims(segment, axis=-1)
                 yield segment, h, w
 
     def forwardProp(self, image: np.array):
@@ -94,7 +93,7 @@ class ConvolutionLayer:
             Output of the convolution layer
         '''
         
-        image_height,image_width = image.shape
+        image_height,image_width,*_ = image.shape
 
         # Create an array of zeros with the size of the convolution output that will be modified.
         convolution_output = np.zeros((image_height-self.kernel_size+1, image_width-self.kernel_size+1, self.kernel_num))
@@ -102,7 +101,7 @@ class ConvolutionLayer:
         # Run convolution on each segment of the image
         # Convolution = Sum of Segments x Kernels to apply bias
         for segment, h, w in self.segmentGenerator(image):
-            convolution_output[h,w] = sigmoid(np.sum(segment*self.kernels, axis=(1,2)))
+            convolution_output[h,w] = np.sum(segment*self.kernels, axis=(1,2))
         
         return convolution_output
     
@@ -145,20 +144,28 @@ class CNN:
     def __init__(self) -> None:
         pass
 
-def sigmoid(value):
-    return (1 / (1 + np.e**-value))
-
 if __name__ == "__main__":
 
-    cl = ConvolutionLayer(5, 5)
+    cl = ConvolutionLayer(1, 3)
     
     image = Image.open('image.jpg').convert("L")
+    image.save("L.jpg")
     image = np.asarray(image)
-    # print(image.shape)
-    # print(image)
-    new = cl.forwardProp(image)
-    # print(new)
-    newimg = np.append(new[0], [*new][1::])
-    print(newimg)
-    im = Image.fromarray(newimg, "L")
-    im.save("image1.jpg")
+    # Allow any size of pixels for saving
+    Image.MAX_IMAGE_PIXELS = None
+    img = cl.forwardProp(image)
+
+    newimg = None
+    percent = 0.0
+    # Concatenate all np arrays to put together
+    # for i in range(len(img)):
+    #     if i == 0: newimg = img[0]; continue
+    #     newimg = np.concatenate((newimg, img[i]), axis=1)
+    #     if percent != np.floor(i/len(img)*100):
+    #         percent = np.floor(i/len(img)*100)
+    #         print(f"{percent}%")
+    print("100.0%")
+    Image.MAX_IMAGE_PIXELS = None
+    print(len(img), len(img[0]), len(img[0][0]))
+    print(img[0][0])
+    Image.fromarray(img, mode="L").convert('RGB').save("coolio.jpg")
