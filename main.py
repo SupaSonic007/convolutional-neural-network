@@ -158,14 +158,14 @@ if __name__ == "__main__":
     newimg = None
     percent = 0.0
     # Concatenate all np arrays to put together
-    # for i in range(len(img)):
-    #     if i == 0: newimg = img[0]; continue
-    #     newimg = np.concatenate((newimg, img[i]), axis=1)
-    #     if percent != np.floor(i/len(img)*100):
-    #         percent = np.floor(i/len(img)*100)
-    #         print(f"{percent}%")
+    for i in range(len(img)):
+        if i == 0: newimg = img[0]; continue
+        newimg = np.concatenate((newimg, img[i]), axis=1)
+        if percent != np.floor(i/len(img)*100):
+            percent = np.floor(i/len(img)*100)
+            print(f"{percent}%")
     print("100.0%")
     Image.MAX_IMAGE_PIXELS = None
     print(len(img), len(img[0]), len(img[0][0]))
     print(img[0][0])
-    Image.fromarray(img, mode="L").convert('RGB').save("coolio.jpg")
+    Image.fromarray(newimg, mode="L").convert('RGB').resize((1020,1020)).save("coolio.jpg")
