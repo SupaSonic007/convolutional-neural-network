@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-from matplotlib import cm
+from matplotlib import pyplot as plt
 
 # https://towardsdatascience.com/building-a-convolutional-neural-network-from-scratch-using-numpy-a22808a00a40
 # https://towardsdatascience.com/convolutional-neural-networks-explained-9cc5188c4939
@@ -22,7 +22,7 @@ class ConvolutionLayer:
     segmentGenerator(image: np.array) -> height, width
     '''
 
-    def __init__(self, kernel_num: int, kernel_size: int) -> None:
+    def __init__(self) -> None:
         '''
         Initialise the Convolution layer of a Convolutional Neural Network
 
@@ -42,11 +42,16 @@ class ConvolutionLayer:
         -------
         cl = ConvolutionalLayer(2, 3)
         '''
-        self.kernel_num = kernel_num
-        self.kernel_size = kernel_size
 
-        # Generate kernels x*y in size with random variables to be trained, normalisation by with kernel_size ** 2
-        self.kernels = np.random.randn(kernel_num, kernel_size, kernel_size) / kernel_size ** 2
+        self.kernel_num = 1
+        self.kernel_size = 3
+        self.kernel = np.array(
+            [
+                [-1, -1, -1],
+                [-1,  8, -1],
+                [-1, -1, -1],
+            ]
+        )
 
     def segmentGenerator(self, image: np.array):
         '''
@@ -101,7 +106,16 @@ class ConvolutionLayer:
         # Run convolution on each segment of the image
         # Convolution = Sum of Segments x Kernels to apply bias
         for segment, h, w in self.segmentGenerator(image):
-            convolution_output[h,w] = np.sum(segment*self.kernels, axis=(1,2))
+            segment_value = 0
+
+            for y in range(len(segment)):
+                for x in range(len(segment)):
+                    segment_value += segment[y][x] * self.kernel[y][x]
+            
+            convolution_output[h][w] = segment_value
+
+                    
+            # convolution_output[h,w] = np.sum(segment*(np.rot90(self.kernel, 3)))
         
         return convolution_output
     
@@ -122,11 +136,11 @@ class ConvolutionLayer:
         dE_dK: np.array
             Derivative of the error in respect to the kernels
         '''
-        dE_dk = np.zeros(self.kernels.shape)
+        dE_dk = np.zeros(self.kernel.shape)
         for patch, h, w in self.patches_generator(self.image):
             for f in range(self.kernel_num):
                 dE_dk[f] += patch * dE_dY[h, w, f]
-        self.kernels -= alpha*dE_dk
+        self.kernel -= alpha*dE_dk
         return dE_dk
 
 class PoolingLayer:
@@ -146,26 +160,13 @@ class CNN:
 
 if __name__ == "__main__":
 
-    cl = ConvolutionLayer(1, 3)
-    
-    image = Image.open('image.jpg').convert("L")
-    image.save("L.jpg")
+    cl = ConvolutionLayer()
+    filename = "image.jpg"
+    image = Image.open(filename).convert("L")
+    image.save(f"{filename}_greyscale.jpg")
     image = np.asarray(image)
-    # Allow any size of pixels for saving
-    Image.MAX_IMAGE_PIXELS = None
     img = cl.forwardProp(image)
 
-    newimg = None
-    percent = 0.0
-    # Concatenate all np arrays to put together
-    for i in range(len(img)):
-        if i == 0: newimg = img[0]; continue
-        newimg = np.concatenate((newimg, img[i]), axis=1)
-        if percent != np.floor(i/len(img)*100):
-            percent = np.floor(i/len(img)*100)
-            print(f"{percent}%")
-    print("100.0%")
-    Image.MAX_IMAGE_PIXELS = None
-    print(len(img), len(img[0]), len(img[0][0]))
-    print(img[0][0])
-    Image.fromarray(newimg, mode="L").convert('RGB').resize((1020,1020)).save("coolio.jpg")
+    plt.imshow(img, cmap='gray')
+    plt.savefig(f"{filename}_output.jpg", dpi=img.shape[0])
+    plt.show()
