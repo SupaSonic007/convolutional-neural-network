@@ -11,47 +11,50 @@ class ConvolutionLayer:
 
     Attributes
     ----------
-    kernel_num: int
+    `kernel_num: int`
         The number of kernels (filters) associated with the convolution layer
     
-    kernel_size: int
+    `kernel_size: int`
         The size of the kernels (filters) associated with the convolution layer
 
     Methods
     -------
-    segmentGenerator(image: np.array) -> height, width
+    `segmentGenerator(image: np.array)` -> `height`, `width`
+        Generate smaller segments of an image
+    
+    `forwardProp(image: np.array)` -> `convolution_output: np.array`
+        Carries out the convolution for each generated portion of the image
+
+    `back_prop(dE_dY, alpha)` -> `dE_dK: np.array`
+        Calculate the gradient of the loss function
     '''
 
-    def __init__(self) -> None:
+    def __init__(self, kernel_num: int, kernel_size: int) -> None:
         '''
         Initialise the Convolution layer of a Convolutional Neural Network
 
         Parameters
         ------
-        kernel_num: Integer
+        `kernel_num: Integer`
             The number of kernels (filters) to pass through
         
-        kernel_size: Integer
+        `kernel_size: Integer`
             The size of the kernels (filters)
 
         Returns
         -------
-        None
+        `None`
 
         Example
         -------
-        cl = ConvolutionalLayer(2, 3)
+        `cl = ConvolutionalLayer(2, 3)`
         '''
 
-        self.kernel_num = 1
-        self.kernel_size = 3
-        self.kernel = np.array(
-            [
-                [-1, -1, -1],
-                [-1,  8, -1],
-                [-1, -1, -1],
-            ]
-        )
+        self.kernel_num = kernel_num
+        self.kernel_size = kernel_size
+
+        # Generate kernels x*y in size with random variables to be trained, normalisation by with kernel_size ** 2
+        self.kernels = np.random.randn(kernel_num, kernel_size, kernel_size) / kernel_size ** 2
 
     def segmentGenerator(self, image: np.array):
         '''
@@ -59,18 +62,18 @@ class ConvolutionLayer:
 
         Parameters
         ----------
-        image: np.array
+        `image: np.array`
             numpy array representation of the image
 
         Returns
         -------
-        Portion: np.array
+        `Portion: np.array`
             The portion of the image
         
-        Height: int
+        `Height: int`
             The starting height value of the portion
         
-        Width: int
+        `Width: int`
             The starting width value of the portion
 
         ### Yields each portion of the image with respect to the kernel size
@@ -89,12 +92,12 @@ class ConvolutionLayer:
 
         Parameters
         ----------
-        image: np.array
+        `image: np.array`
             numpy array representation of the image
         
         Returns
         -------
-        convolution_output: np.array
+        `convolution_output: np.array`
             Output of the convolution layer
         '''
         
@@ -106,16 +109,8 @@ class ConvolutionLayer:
         # Run convolution on each segment of the image
         # Convolution = Sum of Segments x Kernels to apply bias
         for segment, h, w in self.segmentGenerator(image):
-            segment_value = 0
-
-            for y in range(len(segment)):
-                for x in range(len(segment)):
-                    segment_value += segment[y][x] * self.kernel[y][x]
-            
-            convolution_output[h][w] = segment_value
-
                     
-            # convolution_output[h,w] = np.sum(segment*(np.rot90(self.kernel, 3)))
+            convolution_output[h,w] = np.sum(segment*self.kernels)
         
         return convolution_output
     
@@ -125,19 +120,19 @@ class ConvolutionLayer:
 
         Parameters
         ----------
-        dE_dY
+        `dE_dY`
             Derivative of the error in respect to the output
         
-        alpha
+        `alpha`
             The learning rate of the model
 
         Returns
         -------
-        dE_dK: np.array
+        `dE_dK: np.array`
             Derivative of the error in respect to the kernels
         '''
         dE_dk = np.zeros(self.kernel.shape)
-        for patch, h, w in self.patches_generator(self.image):
+        for patch, h, w in self.segmentGenerator(self.image):
             for f in range(self.kernel_num):
                 dE_dk[f] += patch * dE_dY[h, w, f]
         self.kernel -= alpha*dE_dk
@@ -145,8 +140,111 @@ class ConvolutionLayer:
 
 class PoolingLayer:
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, kernel_size: int) -> None:
+        '''
+        Initialise the Pooling layer of a Convolutional Neural Network
+
+        Parameters
+        ----------
+        `kernel_size: Integer`
+            The size of the kernels (filters)
+        
+        Returns
+        -------
+        `None`
+
+        Example
+        -------
+        `pl = PoolingLayer(2)`
+        '''
+        self.kernel_size = kernel_size
+
+    def segmentGenerator(self, image):
+        '''
+        Generate smaller segments of an image
+
+        Parameters
+        ----------
+        `image: np.array`
+            numpy array representation of the image
+
+        Returns
+        -------
+        `Portion: np.array`
+            The portion of the image
+        
+        `Height: int`
+            The starting height value of the portion
+        
+        `Width: int`
+            The starting width value of the portion
+
+        ### Yields each portion of the image with respect to the kernel size
+        '''
+
+        # Height of each segment in reference to kernels
+        height = image.shape[0] // self.kernel_size
+        width = image.shape[1] // self.kernel_size
+        self.image = image
+
+        for h in range(height):
+            for w in range(width):
+                segment = image[(h*self.kernel_size):(h*self.kernel_size+self.kernel_size), (w*self.kernel_size):(w*self.kernel_size+self.kernel_size)]
+                yield segment, h, w
+
+    def forward_prop(self, image):
+        '''
+        Carries out the max pooling for each generated portion of the image
+
+        Parameters
+        ----------
+        image: np.array
+            numpy array representation of the image
+
+        Returns
+        -------
+        max_pooling_output: np.array
+            Output of the max pooling layer
+        '''
+        image_h, image_w, num_kernels = image.shape
+        # Max val in each segment
+        max_pooling_output = np.zeros((image_h//self.kernel_size, image_w//self.kernel_size, num_kernels))
+        for segment, h, w in self.segmentGenerator(image):
+            # np.amax -> Array maximum value of each segment
+            max_pooling_output[h,w] = np.amax(segment, axis=(0,1))
+        return max_pooling_output
+    
+    def back_prop(self, dE_dY):
+        '''
+        Calculate the gradient of the loss function
+
+        Parameters
+        ----------
+        `dE_dY`
+            Derivative of the error in respect to the output
+        
+        Returns
+        -------
+        `dE_dK: np.array`
+            Derivative of the error in respect to the kernels
+        '''
+
+        # Initialise the array for holding error
+        dE_dk = np.zeros(self.image.shape)
+        for patch,h,w in self.patches_generator(self.image):
+            image_h, image_w, num_kernels = patch.shape
+            max_val = np.amax(patch, axis=(0,1))
+            
+            for height_index in range(image_h):
+      
+                for width_index in range(image_w):
+                    
+                    for kernel_index in range(num_kernels):
+
+                        if patch[height_index,width_index,kernel_index] == max_val[kernel_index]:
+      
+                            dE_dk[h*self.kernel_size+height_index, w*self.kernel_size+width_index, kernel_index] = dE_dY[h,w,kernel_index]
+            return dE_dk
 
 class FullyConnectedLayer:
 
@@ -160,13 +258,14 @@ class CNN:
 
 if __name__ == "__main__":
 
-    cl = ConvolutionLayer()
+    cl = ConvolutionLayer(5, 3)
     filename = "image.jpg"
     image = Image.open(filename).convert("L")
     image.save(f"{filename}_greyscale.jpg")
     image = np.asarray(image)
     img = cl.forwardProp(image)
 
-    plt.imshow(img, cmap='gray')
-    plt.savefig(f"{filename}_output.jpg", dpi=img.shape[0])
-    plt.show()
+    for i in range(len(img[0][0])):
+        plt.imshow(img[:,:,i], cmap='gray')
+        plt.savefig(f"{filename}_output_{i}.jpg", dpi=img.shape[0])
+        plt.show()
