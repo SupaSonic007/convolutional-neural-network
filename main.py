@@ -118,30 +118,6 @@ class ConvolutionLayer:
             # convolution_output[h,w] = np.sum(segment*(np.rot90(self.kernel, 3)))
         
         return convolution_output
-    
-    def back_prop(self, dE_dY, alpha):
-        '''
-        Calculate the gradient of the loss function
-
-        Parameters
-        ----------
-        dE_dY
-            Derivative of the error in respect to the output
-        
-        alpha
-            The learning rate of the model
-
-        Returns
-        -------
-        dE_dK: np.array
-            Derivative of the error in respect to the kernels
-        '''
-        dE_dk = np.zeros(self.kernel.shape)
-        for patch, h, w in self.patches_generator(self.image):
-            for f in range(self.kernel_num):
-                dE_dk[f] += patch * dE_dY[h, w, f]
-        self.kernel -= alpha*dE_dk
-        return dE_dk
 
 class PoolingLayer:
 
