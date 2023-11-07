@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
+from pickle import dump, load
 
 # https://towardsdatascience.com/building-a-convolutional-neural-network-from-scratch-using-numpy-a22808a00a40
 # https://towardsdatascience.com/convolutional-neural-networks-explained-9cc5188c4939
@@ -114,7 +115,7 @@ class ConvolutionLayer:
         
         return convolution_output
     
-    def back_prop(self, dE_dY, alpha):
+    def back_prop(self, dE_dY, alpha:float):
         '''
         Calculate the gradient of the loss function
 
@@ -178,7 +179,7 @@ class PoolingLayer:
         '''
         self.kernel_size = kernel_size
 
-    def segmentGenerator(self, image):
+    def segmentGenerator(self, image: np.array):
         '''
         Generate smaller segments of an image
 
@@ -202,16 +203,20 @@ class PoolingLayer:
         '''
 
         # Height of each segment in reference to kernels
+        # `//` -> Floor division
         height = image.shape[0] // self.kernel_size
         width = image.shape[1] // self.kernel_size
+        
         self.image = image
 
         for h in range(height):
             for w in range(width):
+                # Create the segment of the image based on the kernel size and position
                 segment = image[(h*self.kernel_size):(h*self.kernel_size+self.kernel_size), (w*self.kernel_size):(w*self.kernel_size+self.kernel_size)]
+                # Yield generated object
                 yield segment, h, w
 
-    def forward_prop(self, image):
+    def forwardProp(self, image: np.array):
         '''
         Carries out the max pooling for each generated portion of the image
 
@@ -279,14 +284,14 @@ class FullyConnectedLayer:
 
     Methods
     -------
-    `forward_prop(image: np.array)` -> `softmax_output: np.array`
+    `forwardProp(image: np.array)` -> `softmax_output: np.array`
         Carries out the softmax for each generated portion of the image
 
     `back_prop(dE_dY, alpha)` -> `dE_dX: np.array`
         Calculate the gradient of the loss function
     '''
     
-    def __init__(self, input_units, output_units):
+    def __init__(self, input_units:int, output_units:int):
         '''
         Initialise the Fully connected layer of a Convolutional Neural Network
 
@@ -311,7 +316,7 @@ class FullyConnectedLayer:
         self.weight = np.random.randn(input_units, output_units)/input_units
         self.bias = np.zeros(output_units)
 
-    def forward_prop(self, image):
+    def forwardProp(self, image:np.array):
         '''
         Carries out the sigmoid on the image
 
@@ -333,56 +338,178 @@ class FullyConnectedLayer:
         sigmoid_output = np.exp(first_output) / np.sum(np.exp(first_output), axis=0)
         return sigmoid_output
 
-    def back_prop(self, dE_dY, alpha):
-            '''
-            Calculate the gradient of the loss function
+    def back_prop(self, dE_dY, alpha:float):
+        '''
+        Calculate the gradient of the loss function
 
-            Parameters
-            ----------
-            `dE_dY`: np.array
-                Derivative of the error in respect to the output
-            
-            `alpha`: float
-                The learning rate of the model
+        Parameters
+        ----------
+        `dE_dY`: np.array
+            Derivative of the error in respect to the output
+        
+        `alpha`: float
+            The learning rate of the model
 
-            Returns
-            -------
-            `dE_dX: np.array`
-                Derivative of the error in respect to the kernels
-            '''
+        Returns
+        -------
+        `dE_dX: np.array`
+            Derivative of the error in respect to the kernels
+        '''
 
-            # Loop through each gradient in the derivative of the error in respect to the output
-            for i, gradient in enumerate(dE_dY):
-                if gradient == 0:
-                    continue
+        # Loop through each gradient in the derivative of the error in respect to the output
+        for i, gradient in enumerate(dE_dY):
+            if gradient == 0:
+                continue
 
-                # Calculate the transformation equation and total sum
-                transformation_eq = np.exp(self.output)
-                S_total = np.sum(transformation_eq)
+            # Calculate the transformation equation and total sum
+            transformation_eq = np.exp(self.output)
+            S_total = np.sum(transformation_eq)
 
-                # Calculate dY_dZ (derivative of the output in respect to the input)
-                dY_dZ = -transformation_eq[i]*transformation_eq / (S_total**2)
-                dY_dZ[i] = transformation_eq[i]*(S_total - transformation_eq[i]) / (S_total**2)
+            # Calculate dY_dZ (derivative of the output in respect to the input)
+            dY_dZ = -transformation_eq[i]*transformation_eq / (S_total**2)
+            dY_dZ[i] = transformation_eq[i]*(S_total - transformation_eq[i]) / (S_total**2)
 
-                # Calculate dZ_dw, dZ_db, and dZ_dX
-                dZ_dw = self.flattened_input
-                dZ_db = 1
-                dZ_dX = self.weight
+            # Calculate dZ_dw, dZ_db, and dZ_dX
+            dZ_dw = self.flattened_input
+            dZ_db = 1
+            dZ_dX = self.weight
 
-                # Calculate dE_dZ
-                dE_dZ = gradient * dY_dZ
+            # Calculate dE_dZ
+            dE_dZ = gradient * dY_dZ
 
-                # Calculate dE_dw, dE_db, and dE_dX
-                dE_dw = dZ_dw[np.newaxis].T @ dE_dZ[np.newaxis]
-                dE_db = dE_dZ * dZ_db
-                dE_dX = dZ_dX @ dE_dZ
+            # Calculate dE_dw, dE_db, and dE_dX
+            dE_dw = dZ_dw[np.newaxis].T @ dE_dZ[np.newaxis]
+            dE_db = dE_dZ * dZ_db
+            dE_dX = dZ_dX @ dE_dZ
 
-                # Update weight and bias using gradient descent
-                self.weight -= alpha*dE_dw
-                self.bias -= alpha*dE_db
+            # Update weight and bias using gradient descent
+            self.weight -= alpha*dE_dw
+            self.bias -= alpha*dE_db
 
-                # Reshape dE_dX to its original shape
-                return dE_dX.reshape(self.original_shape)
+            # Reshape dE_dX to its original shape
+            return dE_dX.reshape(self.original_shape)
+
+class CNN:
+    '''
+    Convolutional Neural Network
+
+    Attributes
+    ----------
+    `layers: list`
+        A list of layers in the network, in the order they were applied
+
+    Methods
+    -------
+    `add_layer(layer)`
+        Add a layer to the neural network
+
+    `train(image, label)`
+        Train the neural network on a single image-label pair
+
+    `predict(image)`
+        Predict the label of an image
+    '''
+
+    def __init__(self, layers:list | None=None):
+        '''
+        Initialise the Convolutional Neural Network
+
+        Parameters
+        ----------
+        `layers`: list (optional)
+            A list of layers in the network, in the order they were applied
+
+        Returns
+        -------
+        `None`
+
+        Example
+        -------
+        `cnn = CNN([layers])`
+        '''
+        # Initialise the layers
+        self.layers = layers if layers else [
+            ConvolutionLayer(5, 3), # Output: 1020x1020x5
+            PoolingLayer(4), # Output: 255x255x5 (1020/4 = 255)
+            FullyConnectedLayer((255**255)*5, 10) # Output: 10
+            ]
+
+    def add_layer(self, layer):
+        '''
+        Add a layer to the neural network
+
+        Parameters
+        ----------
+        `layer`
+            The layer to be added to the neural network
+
+        Returns
+        -------
+        `None`
+        '''
+        self.layers.append(layer)
+
+    def train(self, inputs, expected_output, alpha=0.05):
+        '''
+        Train the neural network on a single image-label pair
+
+        Parameters
+        ----------
+        `inputs`: np.array
+            The input images for the network
+
+        `expected_output`: np.array
+            The expected output of the network
+
+        `alpha`: float
+            The learning rate for the backpropagation. Defaults to 0.05.
+
+        Returns
+        -------
+        `loss`: float
+            The loss (cross-entropy) of the network after training
+
+        `accuracy`: int
+            The accuracy of the network after training
+        '''
+        # Forward step
+
+        for input, exp_output in zip(inputs, expected_output):
+            output = self.predict(image)
+            loss = -np.log(output[exp_output])
+            gradient = np.zeros(10)
+            # 
+            gradient[output] = -1/output[output]
+        gradient_back = CNN_backprop(gradient, self.layers, alpha)
+
+
+        # Initial gradient
+
+        # Backprop step
+
+    def predict(self, image):
+        '''
+        Predict the label of an image
+
+        Parameters
+        ----------
+        `image`: np.array
+            The input image to the network
+
+        Returns
+        -------
+        `label`: int
+            The predicted label of the image
+        '''
+        # Normalize the input image
+        output = image/255.
+
+        for layer in self.layers:
+            output = layer.forwardProp(output)
+            print(output.shape)
+
+        print(output)
+        # Return the label with the highest probability
 
 def CNN_forward(image, label, layers):
     '''
@@ -417,7 +544,7 @@ def CNN_forward(image, label, layers):
 
     # Forward propagate through each layer
     for layer in layers:
-        output = layer.forward_prop(output)
+        output = layer.forwardProp(output)
 
     # Compute loss (cross-entropy) and accuracy
     loss = -np.log(output[label])
@@ -461,7 +588,8 @@ def CNN_backprop(gradient, layers, alpha=0.05):
 
 def CNN_training(image, label, layers, alpha=0.05):
     '''
-    Train a convolutional neural network.
+    Train a convolutional neural network by taking checking the 
+    output against the loss and accuracy of the model.
 
     Parameters
     ----------
@@ -498,42 +626,49 @@ def CNN_training(image, label, layers, alpha=0.05):
 
     return loss, accuracy
 
-# if __name__ == "__main__":
+def save_params(layers:list):
 
-#     cl = ConvolutionLayer(5, 3)
-#     filename = "image.jpg"
-#     image = Image.open(filename).convert("L")
-#     image.save(f"{filename}_greyscale.jpg")
-#     image = np.asarray(image)
-#     img = cl.forwardProp(image)
+    for layer in layers:
+        with open(f'{layer.__class__.__name__}_params.pickle', 'wb') as f:
+            dump(layer, f)
 
-#     for i in range(len(img[0][0])):
-#         plt.imshow(img[:,:,i], cmap='gray')
-#         plt.savefig(f"{filename}_output_{i}.jpg", dpi=img.shape[0])
-#         plt.show()
-        
+def load_params(layers:list):
+    
+    params = list()
+    for layer in layers:
+        with open(f'{layer.__name__}_params.pickle', 'rb') as f:
+            layer = load(f)
+            params.append(layer)
+
+    return params
+    
+
 if __name__ == "__main__":
-    # Define the layers of the CNN
-    layers = [
-        ConvolutionLayer(5, 3),
-        PoolingLayer(2),
-        FullyConnectedLayer(13*13*3, 100),
-        FullyConnectedLayer(100, 20)
-    ]
 
-    # Load the image and label data
-
+    # cl = ConvolutionLayer(5, 3)
     filename = "image.jpg"
     image = Image.open(filename).convert("L")
     image.save(f"{filename}_greyscale.jpg")
-    image = np.asarray(image)
-    images, labels = load_data()
+    image = np.asarray(image.resize((1024, 1024)))
+    # img = cl.forwardProp(image)
 
-    # Train the CNN on the image data
-    for i in range(len(images)):
-        image = images[i]
-        label = labels[i]
-        loss, accuracy = CNN_training(image, label, layers)
+    # pl = PoolingLayer(4)
+    # max_pooling_output = pl.forwardProp(img)
+    # print(max_pooling_output.shape)
 
-        # Print the loss and accuracy for each image
-        print(f"Image {i+1}: Loss = {loss:.4f}, Accuracy = {accuracy}")
+    # fcl_input_size = max_pooling_output.shape[0] * max_pooling_output.shape[1] * max_pooling_output.shape[2]
+    # fcl = FullyConnectedLayer(fcl_input_size, 10)
+    # output = fcl.forwardProp(max_pooling_output)
+    # print(output)
+
+    cnn = CNN([ConvolutionLayer(5, 3), PoolingLayer(4), FullyConnectedLayer(1020*1020, 10)])
+
+    cnn.predict(image)
+
+    # [cl, pl, fcl] = load_params([ConvolutionLayer, PoolingLayer, FullyConnectedLayer])
+
+
+    # for i in range(len(img[0][0])):
+    #     plt.imshow(img[:,:,i], cmap='gray')
+    #     plt.savefig(f"{filename}_output_{i}.jpg", dpi=img.shape[0])
+    #     plt.show()
